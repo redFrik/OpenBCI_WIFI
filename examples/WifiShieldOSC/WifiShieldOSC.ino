@@ -7,7 +7,6 @@
 
 //TODO:
 //wifi config reset
-//check udp package max size
 //deal with errors in oscCommand
 //extract reply and send back in oscCommand
 //test more commands http://docs.openbci.com/OpenBCI%20Software/04-OpenBCI_Cyton_SDK
@@ -28,6 +27,7 @@
 #include "OpenBCI_Wifi_Definitions.h"
 #include "OpenBCI_Wifi.h"
 
+#define MAX_PACKETS_PER_SEND_OSC 32 //(9*32+1)= 289 which is just under 291 integers
 #define OSCINPORT 13999  //EDIT input osc port
 int udpPort = 57120; //EDIT output osc port (supercollider by default)
 char *espname = "OpenBCI_WifiShield";
@@ -196,10 +196,10 @@ void loop() {
   if (packetsToSend < 0) {
     packetsToSend = NUM_PACKETS_IN_RING_BUFFER_RAW + packetsToSend; // for wrap around
   }
-  if (packetsToSend > MAX_PACKETS_PER_SEND_TCP) { //TODO test
-    packetsToSend = MAX_PACKETS_PER_SEND_TCP;
+  if (packetsToSend > MAX_PACKETS_PER_SEND_OSC) {
+    packetsToSend = MAX_PACKETS_PER_SEND_OSC;
   }
-  if ((micros() > (lastSendToClient + wifi.getLatency()) || packetsToSend == MAX_PACKETS_PER_SEND_TCP) && (packetsToSend > 0)) {
+  if ((micros() > (lastSendToClient + wifi.getLatency()) || packetsToSend == MAX_PACKETS_PER_SEND_OSC) && (packetsToSend > 0)) {
 
     OSCMessage msg("/data");
     uint32_t taily = wifi.rawBufferTail;
