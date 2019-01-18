@@ -6,6 +6,8 @@
 //press PRG (gpio0) to enter wifi configuration
 
 //TODO:
+//maybe set default latency to 5000
+//adapt for Ganglion and CytonDaisy
 //wifi config reset
 //deal with errors in oscCommand
 //extract reply and send back in oscCommand
@@ -27,7 +29,7 @@
 #include "OpenBCI_Wifi_Definitions.h"
 #include "OpenBCI_Wifi.h"
 
-#define MAX_PACKETS_PER_SEND_OSC 32 //(9*32+1)= 289 which is just under 291 integers
+#define MAX_PACKETS_PER_SEND_OSC 39
 #define OSCINPORT 13999  //EDIT input osc port
 int udpPort = 57120; //EDIT output osc port (supercollider by default)
 char *espname = "OpenBCI_WifiShield";
@@ -208,35 +210,7 @@ void loop() {
         taily = 0;
       }
       uint8_t *buf = wifi.rawBuffer[taily];
-      uint8_t stopByte = buf[0];
-
-      msg.add(uint16_t(buf[1])); //sample number
-
-      for (uint8_t j = 0; j < 8; j++) { //eight channels of eeg data
-        int16_t msb = buf[j * 3 + 2];
-        if (msb & 128) {
-          msb = -256 + msb;
-        }
-        msg.add((msb << 16) + (buf[j * 3 + 3] << 8) + buf[j * 3 + 4]);
-      }
-
-      switch (stopByte) { //check which type of aux bytes
-        case 0xC0:
-          if (buf[26] != 0 || buf[27] != 0 || buf[28] != 0 || buf[29] != 0 || buf[30] != 0 || buf[31] != 0) {
-            OSCMessage acc("/acc");
-            for (uint8_t k = 0; k < 3; k++) { //accelerometer xyz
-              int16_t msb = buf[k * 2 + 26];
-              if (msb & 128) {
-                msb = -256 + msb;
-              }
-              acc.add((msb << 8) + buf[k * 2 + 27]);
-            }
-            sendMsg(acc);
-            acc.empty();
-          }
-          break;
-      }
-
+      msg.add(buf, BYTES_PER_SPI_PACKET);
       taily += 1;
     }
     sendMsg(msg);
