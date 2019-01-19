@@ -6,7 +6,6 @@
 //press PRG (gpio0) to enter wifi configuration
 
 //TODO:
-//maybe set default latency to 5000
 //adapt for Ganglion and CytonDaisy
 //wifi config reset
 //deal with errors in oscCommand
@@ -29,6 +28,7 @@
 #include "OpenBCI_Wifi_Definitions.h"
 #include "OpenBCI_Wifi.h"
 
+#define DEFAULT_LATENCY 5000  //override
 #define MAX_PACKETS_PER_SEND_OSC 39
 #define OSCINPORT 13999  //EDIT input osc port
 int udpPort = 57120; //EDIT output osc port (supercollider by default)
@@ -45,6 +45,7 @@ void tick() {
 void configModeCallback(WiFiManager *myWiFiManager) {
   ticker.attach(0.2, tick);
 }
+
 void oscReady() {
   OSCMessage msg("/ready");
   msg.add(OSCINPORT);
@@ -94,6 +95,7 @@ void setup() {
   SPISlave.setStatus(209);
   SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
 
+  wifi.setLatency(DEFAULT_LATENCY);
   oscReady();
   ticker.detach();
   digitalWrite(LED_BUILTIN, HIGH);
@@ -209,8 +211,7 @@ void loop() {
       if (taily >= NUM_PACKETS_IN_RING_BUFFER_RAW) {
         taily = 0;
       }
-      uint8_t *buf = wifi.rawBuffer[taily];
-      msg.add(buf, BYTES_PER_SPI_PACKET);
+      msg.add(wifi.rawBuffer[taily], BYTES_PER_SPI_PACKET);
       taily += 1;
     }
     sendMsg(msg);
