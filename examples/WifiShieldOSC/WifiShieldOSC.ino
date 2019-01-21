@@ -179,27 +179,27 @@ void loop() {
 
   if (wifi.clientWaitingForResponseFullfilled) {
     wifi.clientWaitingForResponseFullfilled = false;
-    OSCMessage rsp("/response");
+    OSCMessage rpl("/reply");
     switch (wifi.curClientResponse) {
       case wifi.CLIENT_RESPONSE_OUTPUT_STRING:
-        rsp.add(wifi.outputString.c_str());
+        rpl.add(wifi.outputString.c_str());
         wifi.outputString = "";
         break;
       case wifi.CLIENT_RESPONSE_NONE:
       default:
-        rsp.add("");
+        rpl.add("");
         break;
     }
-    sendMsg(rsp);
-    rsp.empty();
+    sendMsg(rpl);
+    rpl.empty();
   }
 
   if (wifi.clientWaitingForResponse && (millis() > (wifi.timePassthroughBufferLoaded + 2000))) {
     wifi.clientWaitingForResponse = false;
-    OSCMessage rsp("/response");
-    rsp.add("timeout error");
-    sendMsg(rsp);
-    rsp.empty();
+    OSCMessage rpl("/reply");
+    rpl.add("timeout error");
+    sendMsg(rpl);
+    rpl.empty();
     wifi.outputString = "";
   }
 
