@@ -1,15 +1,12 @@
 //install OpenBCI_Wifi, OSC, ArduinoJson (the older 5.13.4) libraries
-//select board 'Generic ESP8266 Module' and set cpu freq to 160MHz
-//set Builtin Led to 2
+//select board 'Generic ESP8266 Module' and set cpu freq to "80 MHz"
+//set Builtin Led to "2" and Flash Size to "4M (no SPIFFS)"
 
-//hold down PRG (gpio0) on power up to upload new firmware
-//press PRG (gpio0) to enter wifi configuration
+//hold PRG (gpio0) on power up to upload new firmware
+//press PRG (gpio0) to erase wifi configuration and restart - TODO does not work good - esp bug
 
 //TODO:
 //adapt for Ganglion and CytonDaisy
-//wifi config reset
-//deal with errors in oscCommand
-//extract reply and send back in oscCommand
 //test more commands http://docs.openbci.com/OpenBCI%20Software/04-OpenBCI_Cyton_SDK
 
 #define ARDUINO_ARCH_ESP8266
@@ -28,8 +25,8 @@
 #include "OpenBCI_Wifi_Definitions.h"
 #include "OpenBCI_Wifi.h"
 
-#define DEFAULT_LATENCY 5000  //override
-#define MAX_PACKETS_PER_SEND_OSC 39
+#define DEFAULT_LATENCY 4000  //override OpenBCI_Wifi_Definitions
+#define MAX_PACKETS_PER_SEND_OSC 39 //ensure no segmented packages
 #define OSCINPORT 13999  //EDIT input osc port
 int udpPort = 57120; //EDIT output osc port (supercollider by default)
 char *espname = "OpenBCI_WifiShield";
@@ -43,7 +40,7 @@ void tick() {
   digitalWrite(LED_BUILTIN, !state);
 }
 void configModeCallback(WiFiManager *myWiFiManager) {
-  ticker.attach(0.2, tick);
+  ticker.attach(0.15, tick);
 }
 
 void oscReady() {
@@ -67,7 +64,7 @@ void setup() {
   wifiManager.setAPCallback(configModeCallback);
   if (!wifiManager.autoConnect(espname)) {
     ESP.reset();
-    delay(2000);
+    delay(1000);
   }
   MDNS.begin(espname);  //make .local work
   udpAddress = WiFi.localIP();
@@ -77,21 +74,14 @@ void setup() {
   SPISlave.onData([](uint8_t * data, size_t len) {
     wifi.spiProcessPacket(data);
   });
-
   SPISlave.onDataSent([]() {
     wifi.spiOnDataSent();
     SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
   });
-
-  // The master has read the status register
   SPISlave.onStatusSent([]() {
     SPISlave.setStatus(209);
   });
-
-  // Setup SPI Slave registers and pins
   SPISlave.begin();
-
-  // Set the status register (if the master reads it, it will read this value)
   SPISlave.setStatus(209);
   SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
 
@@ -126,16 +116,7 @@ void oscCommand(OSCMessage &msg) {
   uint8_t len = msg.getDataLength(0);
   char str[len];
   msg.getString(0, str, len);
-  uint8_t res = wifi.passthroughCommands(str);
-  if (res < PASSTHROUGH_PASS) {
-    //TODO deal with errors
-  } else {
-    OSCMessage rpl("/res");
-    rpl.add(int(res));
-    //TODO extract reply and send back
-    sendMsg(rpl);
-    rpl.empty();
-  }
+  wifi.passthroughCommands(str);
 }
 void oscVersion(OSCMessage &msg) {
   OSCMessage rpl("/version");
@@ -196,6 +177,32 @@ void loop() {
     }
   }
 
+  if (wifi.clientWaitingForResponseFullfilled) {
+    wifi.clientWaitingForResponseFullfilled = false;
+    OSCMessage rsp("/response");
+    switch (wifi.curClientResponse) {
+      case wifi.CLIENT_RESPONSE_OUTPUT_STRING:
+        rsp.add(wifi.outputString.c_str());
+        wifi.outputString = "";
+        break;
+      case wifi.CLIENT_RESPONSE_NONE:
+      default:
+        rsp.add("");
+        break;
+    }
+    sendMsg(rsp);
+    rsp.empty();
+  }
+
+  if (wifi.clientWaitingForResponse && (millis() > (wifi.timePassthroughBufferLoaded + 2000))) {
+    wifi.clientWaitingForResponse = false;
+    OSCMessage rsp("/response");
+    rsp.add("timeout error");
+    sendMsg(rsp);
+    rsp.empty();
+    wifi.outputString = "";
+  }
+
   int packetsToSend = wifi.rawBufferHead - wifi.rawBufferTail;
   if (packetsToSend < 0) {
     packetsToSend = NUM_PACKETS_IN_RING_BUFFER_RAW + packetsToSend; // for wrap around
@@ -224,10 +231,8 @@ void loop() {
     wifi.passthroughCommands("s");  //stop streaming
     SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
     while (digitalRead(0) == LOW) {}
-    ESP.eraseConfig();  //TODO does not work
-    WiFi.disconnect();
-    delay(1000);
-    ESP.restart();
-    delay(1000);
+    WiFiManager wifiManager;
+    wifiManager.resetSettings();
+    ESP.reset();
   }
 }
