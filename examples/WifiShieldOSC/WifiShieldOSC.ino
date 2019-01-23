@@ -7,7 +7,6 @@
 
 //TODO:
 //adapt for Ganglion and CytonDaisy
-//test more commands http://docs.openbci.com/OpenBCI%20Software/04-OpenBCI_Cyton_SDK
 
 #define ARDUINO_ARCH_ESP8266
 #define ESP8266
@@ -116,7 +115,29 @@ void oscCommand(OSCMessage &msg) {
   uint8_t len = msg.getDataLength(0);
   char str[len];
   msg.getString(0, str, len);
-  wifi.passthroughCommands(str);
+  uint8_t retVal = wifi.passthroughCommands(str);
+  if (retVal < PASSTHROUGH_PASS) {
+    OSCMessage rpl("/reply");
+    switch (retVal) {
+      case PASSTHROUGH_FAIL_TOO_MANY_CHARS:
+        rpl.add(501);
+        rpl.add("Error: Sent more than 31 chars");
+        break;
+      case PASSTHROUGH_FAIL_NO_CHARS:
+        rpl.add(505);
+        rpl.add("Error: No characters found for key 'command'");
+        break;
+      case PASSTHROUGH_FAIL_QUEUE_FILLED:
+        rpl.add(503);
+        rpl.add("Error: Queue is full, please wait 20ms and try again.");
+        break;
+      default:
+        rpl.add(504);
+        rpl.add("Error: Unknown error");
+    }
+    sendMsg(rpl);
+    rpl.empty();
+  }
 }
 void oscVersion(OSCMessage &msg) {
   OSCMessage rpl("/version");
@@ -197,7 +218,8 @@ void loop() {
   if (wifi.clientWaitingForResponse && (millis() > (wifi.timePassthroughBufferLoaded + 2000))) {
     wifi.clientWaitingForResponse = false;
     OSCMessage rpl("/reply");
-    rpl.add("timeout error");
+    rpl.add(502);
+    rpl.add("Error: timeout getting command response, be sure board is fully connected");
     sendMsg(rpl);
     rpl.empty();
     wifi.outputString = "";
