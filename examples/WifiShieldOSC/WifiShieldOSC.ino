@@ -157,8 +157,8 @@ void oscBoard(OSCMessage &msg) {
   sendMsg(rpl);
   rpl.empty();
 }
-void oscInfo(OSCMessage &msg) {
-  OSCMessage rpl("/info");
+void oscAll(OSCMessage &msg) {
+  OSCMessage rpl("/all");
   rpl.add(wifi.getInfoAll().c_str());
   sendMsg(rpl);
   rpl.empty();
@@ -194,7 +194,7 @@ void loop() {
       oscMsg.dispatch("/version", oscVersion);
       oscMsg.dispatch("/name", oscName);
       oscMsg.dispatch("/board", oscBoard);
-      oscMsg.dispatch("/info", oscInfo);
+      oscMsg.dispatch("/all", oscAll);
     }
   }
 
