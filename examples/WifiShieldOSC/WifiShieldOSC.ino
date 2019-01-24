@@ -24,11 +24,11 @@
 #include "OpenBCI_Wifi_Definitions.h"
 #include "OpenBCI_Wifi.h"
 
-#define DEFAULT_LATENCY 4000  //override OpenBCI_Wifi_Definitions
+#define DEFAULT_LATENCY 5000  //override OpenBCI_Wifi_Definitions
 #define MAX_PACKETS_PER_SEND_OSC 39 //ensure no segmented packages
 #define OSCINPORT 13999  //EDIT input osc port
 int udpPort = 57120; //EDIT output osc port (supercollider by default)
-char *espname = "OpenBCI_WifiShield";
+char *espname = "OpenBCI_WifiShieldOSC";
 IPAddress udpAddress;
 unsigned long lastSendToClient;
 WiFiUDP clientUDP;
