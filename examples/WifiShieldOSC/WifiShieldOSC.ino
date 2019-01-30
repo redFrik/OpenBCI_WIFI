@@ -1,3 +1,4 @@
+//install esp8266 (version 2.4.2) board manager
 //install OpenBCI_Wifi, OSC, ArduinoJson (the older 5.13.4) libraries
 //select board 'Generic ESP8266 Module' and set cpu freq to "80 MHz"
 //set Builtin Led to "2" and Flash Size to "4M (no SPIFFS)"
@@ -54,9 +55,9 @@ void oscReady() {
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-  pinMode(0, INPUT);
   ticker.attach(0.6, tick);
+
+  pinMode(0, INPUT);
   WiFi.hostname(espname);
   wifi_station_set_hostname(espname);
   WiFiManager wifiManager;
@@ -231,7 +232,11 @@ void loop() {
   }
   if (packetsToSend > MAX_PACKETS_PER_SEND_OSC) {
     packetsToSend = MAX_PACKETS_PER_SEND_OSC;
+    digitalWrite(LED_BUILTIN, LOW);
+  } else {
+    digitalWrite(LED_BUILTIN, HIGH);
   }
+
   if ((micros() > (lastSendToClient + wifi.getLatency()) || packetsToSend == MAX_PACKETS_PER_SEND_OSC) && (packetsToSend > 0)) {
 
     OSCMessage msg("/data");
