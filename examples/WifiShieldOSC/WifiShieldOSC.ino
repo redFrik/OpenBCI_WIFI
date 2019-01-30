@@ -1,7 +1,7 @@
 //install esp8266 (version 2.4.2) board manager
 //install OpenBCI_Wifi, OSC, ArduinoJson (the older 5.13.4) libraries
 //select board 'Generic ESP8266 Module' and set cpu freq to "80 MHz"
-//set Builtin Led to "2" and Flash Size to "4M (no SPIFFS)"
+//set Builtin Led to "2" and Flash Size to "4M (1M SPIFFS)"
 
 //hold PRG (gpio0) on power up to upload new firmware
 //press PRG (gpio0) to erase wifi configuration and restart - TODO does not work good - esp bug
@@ -30,7 +30,7 @@
 #define OSCINPORT 13999  //EDIT input osc port
 int udpPort = 57120; //EDIT output osc port (supercollider by default)
 char *espname = "OpenBCI_WifiShieldOSC";
-IPAddress udpAddress;
+IPAddress broadcastAddress;
 unsigned long lastSendToClient;
 WiFiUDP clientUDP;
 Ticker ticker;
@@ -46,7 +46,7 @@ void configModeCallback(WiFiManager *myWiFiManager) {
 void oscReady() {
   OSCMessage msg("/ready");
   msg.add(OSCINPORT);
-  clientUDP.beginPacket(udpAddress, udpPort);
+  clientUDP.beginPacket(broadcastAddress, udpPort);
   msg.send(clientUDP);
   clientUDP.endPacket();
   yield();
@@ -67,8 +67,8 @@ void setup() {
     delay(1000);
   }
   MDNS.begin(espname);  //make .local work
-  udpAddress = WiFi.localIP();
-  udpAddress[3] = 255;  //by default use broadcast ip x.x.x.255
+  broadcastAddress = WiFi.localIP();
+  broadcastAddress[3] = 255;  //ip x.x.x.255
   clientUDP.begin(OSCINPORT);
 
   SPISlave.onData([](uint8_t * data, size_t len) {
@@ -98,12 +98,6 @@ void oscStart(OSCMessage &msg) {
 void oscStop(OSCMessage &msg) {
   wifi.passthroughCommands("s");  //stop streaming
   SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
-}
-void oscIp(OSCMessage &msg) {
-  udpAddress[0] = getIntData(msg, 0);
-  udpAddress[1] = getIntData(msg, 1);
-  udpAddress[2] = getIntData(msg, 2);
-  udpAddress[3] = getIntData(msg, 3);
 }
 void oscPort(OSCMessage &msg) {
   udpPort = getIntData(msg, 0);
@@ -165,7 +159,7 @@ void oscAll(OSCMessage &msg) {
   rpl.empty();
 }
 void sendMsg(OSCMessage &msg) {
-  clientUDP.beginPacket(udpAddress, udpPort);
+  clientUDP.beginPacket(clientUDP.remoteIP(), udpPort);
   msg.send(clientUDP);
   clientUDP.endPacket();
   yield();
@@ -188,7 +182,6 @@ void loop() {
     if (!oscMsg.hasError()) {
       oscMsg.dispatch("/start", oscStart);
       oscMsg.dispatch("/stop", oscStop);
-      oscMsg.dispatch("/ip", oscIp);
       oscMsg.dispatch("/port", oscPort);
       oscMsg.dispatch("/latency", oscLatency);
       oscMsg.dispatch("/command", oscCommand);
@@ -233,8 +226,6 @@ void loop() {
   if (packetsToSend > MAX_PACKETS_PER_SEND_OSC) {
     packetsToSend = MAX_PACKETS_PER_SEND_OSC;
     digitalWrite(LED_BUILTIN, LOW);
-  } else {
-    digitalWrite(LED_BUILTIN, HIGH);
   }
 
   if ((micros() > (lastSendToClient + wifi.getLatency()) || packetsToSend == MAX_PACKETS_PER_SEND_OSC) && (packetsToSend > 0)) {
@@ -252,6 +243,7 @@ void loop() {
     msg.empty();
     lastSendToClient = micros();
     wifi.rawBufferTail = taily;
+    digitalWrite(LED_BUILTIN, HIGH);
   }
 
   if (digitalRead(0) == LOW) {
