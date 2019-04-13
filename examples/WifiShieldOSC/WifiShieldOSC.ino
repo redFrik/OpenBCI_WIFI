@@ -1,10 +1,9 @@
-//install esp8266 (version 2.4.2) board manager
+//install esp8266 (version 2.5.0) board manager
 //install OpenBCI_Wifi, OSC, ArduinoJson (the older 5.13.4) libraries
 //select board 'Generic ESP8266 Module' and set cpu freq to "80 MHz"
 //set Builtin Led to "2" and Flash Size to "4M (1M SPIFFS)"
 
 //hold PRG (gpio0) on power up to upload new firmware
-//press PRG (gpio0) to erase wifi configuration and restart - TODO does not work good - esp bug
 
 //TODO:
 //adapt for Ganglion and CytonDaisy
@@ -13,7 +12,6 @@
 #define ESP8266
 
 #include <ESP8266WiFi.h>
-#include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <WiFiManager.h>
 #include "SPISlave.h"
@@ -28,9 +26,9 @@
 #define DEFAULT_LATENCY 5000  //override OpenBCI_Wifi_Definitions
 #define MAX_PACKETS_PER_SEND_OSC 39 //ensure no segmented packages
 #define OSCINPORT 13999  //EDIT input osc port
-int udpPort = 57120; //EDIT output osc port (supercollider by default)
-char *espname = "OpenBCI_WifiShieldOSC";
-IPAddress broadcastAddress;
+unsigned int udpPort = 57120; //EDIT output osc port (supercollider by default)
+const char *espname = "OpenBCI_WifiShieldOSC";
+
 unsigned long lastSendToClient;
 WiFiUDP clientUDP;
 Ticker ticker;
@@ -43,21 +41,11 @@ void configModeCallback(WiFiManager *myWiFiManager) {
   ticker.attach(0.15, tick);
 }
 
-void oscReady() {
-  OSCMessage msg("/ready");
-  msg.add(OSCINPORT);
-  clientUDP.beginPacket(broadcastAddress, udpPort);
-  msg.send(clientUDP);
-  clientUDP.endPacket();
-  yield();
-  msg.empty();
-}
-
 void setup() {
+  delay(10);
   pinMode(LED_BUILTIN, OUTPUT);
   ticker.attach(0.6, tick);
 
-  pinMode(0, INPUT);
   WiFi.hostname(espname);
   wifi_station_set_hostname(espname);
   WiFiManager wifiManager;
@@ -67,8 +55,6 @@ void setup() {
     delay(1000);
   }
   MDNS.begin(espname);  //make .local work
-  broadcastAddress = WiFi.localIP();
-  broadcastAddress[3] = 255;  //ip x.x.x.255
   clientUDP.begin(OSCINPORT);
 
   SPISlave.onData([](uint8_t * data, size_t len) {
@@ -86,7 +72,6 @@ void setup() {
   SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
 
   wifi.setLatency(DEFAULT_LATENCY);
-  oscReady();
   ticker.detach();
   digitalWrite(LED_BUILTIN, HIGH);
 }
@@ -105,6 +90,23 @@ void oscPort(OSCMessage &msg) {
 void oscLatency(OSCMessage &msg) {
   uint16_t latency = getIntData(msg, 0);
   wifi.setLatency(latency);
+}
+void oscReset(OSCMessage &msg) {
+  wifi.passthroughCommands("s");  //stop streaming
+  SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
+  delay(1);
+  wifi.passthroughCommands("d");  //set default channel settings
+  SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
+  delay(1);
+  wifi.passthroughCommands("~6");  //set default sample rate
+  SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
+  delay(1);
+  wifi.setLatency(DEFAULT_LATENCY);
+
+  OSCMessage rpl("/ready");
+  rpl.add(OSCINPORT);
+  sendMsg(rpl);
+  rpl.empty();
 }
 void oscCommand(OSCMessage &msg) {
   uint8_t len = msg.getDataLength(0);
@@ -172,6 +174,7 @@ int getIntData(OSCMessage &msg, int val) {
 }
 
 void loop() {
+  MDNS.update();
 
   int packetSize = clientUDP.parsePacket();
   if (packetSize) {
@@ -184,6 +187,7 @@ void loop() {
       oscMsg.dispatch("/stop", oscStop);
       oscMsg.dispatch("/port", oscPort);
       oscMsg.dispatch("/latency", oscLatency);
+      oscMsg.dispatch("/reset", oscReset);
       oscMsg.dispatch("/command", oscCommand);
       oscMsg.dispatch("/version", oscVersion);
       oscMsg.dispatch("/name", oscName);
@@ -246,12 +250,5 @@ void loop() {
     digitalWrite(LED_BUILTIN, HIGH);
   }
 
-  if (digitalRead(0) == LOW) {
-    wifi.passthroughCommands("s");  //stop streaming
-    SPISlave.setData(wifi.passthroughBuffer, BYTES_PER_SPI_PACKET);
-    while (digitalRead(0) == LOW) {}
-    WiFiManager wifiManager;
-    wifiManager.resetSettings();
-    ESP.reset();
-  }
+  delay(1);
 }
