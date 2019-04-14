@@ -1,5 +1,6 @@
-//install esp8266 (version 2.5.0) board manager
-//install OpenBCI_Wifi, OSC, ArduinoJson (the older 5.13.4) libraries
+//f.olofsson2019
+//install esp8266 board manager (version 2.5.0)
+//install OpenBCI_Wifi, OSC, ArduinoJson libraries (json need to be the older 5.13.4)
 //select board 'Generic ESP8266 Module' and set cpu freq to "80 MHz"
 //set Builtin Led to "2" and Flash Size to "4M (1M SPIFFS)"
 
